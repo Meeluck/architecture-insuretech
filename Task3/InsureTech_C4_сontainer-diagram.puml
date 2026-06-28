@@ -4,7 +4,7 @@
 ' skinparam componentStyle rectangle
 ' skinparam packageStyle rectangle
 ' skinparam linetype polyline
-skinparam wrapWidth 200
+' skinparam wrapWidth 200
 skinparam maxMessageSize 200
 
 title InsureTech - C4 Container diagram
@@ -14,8 +14,15 @@ LAYOUT_WITH_LEGEND()
 Person(customer, "Клиент", "Клиент")
 
 System_Ext(partner_systems, "Системы партнёров", "Системы партнёров, интегрирующие страховые услуги в свои продукты")
-System_Ext(insurance_company_systems, "Системы страховых компаний", "Предоставляют API для получения актуальных тарифов, андерайтинга и оформления страховых продуктов")
 System_Ext(payment_service, "Платёжный сервис", "Внешний платёжный сервис, через который осуществляется оплата страховок. Деньги уходят на счета страховых компаний")
+
+System_Boundary(insurance_companies, "Страховые компании (сейчас 5 интеграций)") {
+    System_Ext(insurance_company_1, "СК 1", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_2, "СК 2", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_3, "СК 3", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_4, "СК 4", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_5, "СК 5", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+}
 
 System_Boundary(insuretech_prod, "InsureTech Prod") {
     Container(web, "InsureTech Web", "JavaScript, React", "Веб-приложение InsureTech")
@@ -37,18 +44,28 @@ Rel(core_app, core_db, "Работа с данными", "TCP")
 Rel_Up(partner_systems, core_app, "Оформление страховок", "REST")
 
 Rel(core_app, product_aggregator, "Получение информации\nпо продуктам и тарифам", "REST")
-Rel_Left(product_aggregator, insurance_company_systems, "Получение информации\nпо продуктам и тарифам", "REST / SOAP / GraphQL")
+Rel_Left(product_aggregator, insurance_companies, "Получение информации\nпо продуктам и тарифам", "REST / SOAP / GraphQL")
+' Rel_Left(product_aggregator, insurance_company_1, "Получение информации\nпо продуктам и тарифам", "REST")
+' Rel_Left(product_aggregator, insurance_company_2, "Получение информации\nпо продуктам и тарифам", "SOAP")
+' Rel_Left(product_aggregator, insurance_company_3, "Получение информации\nпо продуктам и тарифам", "GraphQL")
+' Rel_Left(product_aggregator, insurance_company_4, "Получение информации\nпо продуктам и тарифам", "REST")
+' Rel_Left(product_aggregator, insurance_company_5, "Получение информации\nпо продуктам и тарифам", "SOAP")
 
 Rel_Right(core_app, client_info, "Получение/сохранение информации о клиентах", "REST")
 Rel(web, client_info, "Получение/сохранение\nинформации о клиентах", "REST")
 Rel(client_info, settlement_db, "Работа с данными", "TCP")
 
 Rel(settlement, settlement_db, "Работа с данными", "TCP")
-Rel(settlement, insurance_company_systems, "Передача данных для взаиморасчётов", "REST / SOAP / GraphQL")
+Rel(settlement, insurance_companies, "Передача данных для взаиморасчётов", "REST / SOAP / GraphQL")
+' Rel(settlement, insurance_company_1, "Передача данных\nдля взаиморасчётов", "REST")
+' Rel(settlement, insurance_company_2, "Передача данных\nдля взаиморасчётов", "SOAP")
+' Rel(settlement, insurance_company_3, "Передача данных\nдля взаиморасчётов", "GraphQL")
+' Rel(settlement, insurance_company_4, "Передача данных\nдля взаиморасчётов", "REST")
+' Rel(settlement, insurance_company_5, "Передача данных\nдля взаиморасчётов", "SOAP")
 Rel(settlement, product_aggregator, "Получение информации\nпо продуктам и тарифам", "REST")
 Rel(settlement, core_app, "Получение информации\nоб оформленных страховках", "REST")
 
 Rel(core_app, payment_service, "Проведение оплаты\nза страховки", "HTTP")
-Rel(web, payment_service, "Проведение оплаты\nза страховки (redirect)", "HTTP")
+Rel_Left(web, payment_service, "Проведение оплаты\nза страховки (redirect)", "HTTP")
 
 @enduml
