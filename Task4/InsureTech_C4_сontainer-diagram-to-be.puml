@@ -1,0 +1,80 @@
+@startuml InsureTech_C4_container_diagram_to_be_task4
+!include <C4/C4_Container>
+
+' skinparam componentStyle rectangle
+' skinparam packageStyle rectangle
+' skinparam linetype polyline
+' skinparam wrapWidth 200
+skinparam maxMessageSize 220
+
+title InsureTech - C4 Container diagram - To Be - OSAGO
+
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент", "Клиент")
+
+System_Ext(partner_systems, "Системы партнёров", "Системы партнёров, интегрирующие страховые услуги в свои продукты")
+System_Ext(payment_service, "Платёжный сервис", "Внешний платёжный сервис, через который осуществляется оплата страховок. Деньги уходят на счета страховых компаний")
+System_Ext(insurance_companies, "Страховые компании (5+ интеграций)", "REST API страховых компаний:\n- создать заявку на ОСАГО\n- получить предложение по заявке\n- получить продукты и тарифы")
+
+System_Boundary(insuretech_prod, "InsureTech Prod") {
+    Container(web, "InsureTech Web", "JavaScript, React", "Веб-приложение InsureTech")
+
+    Container(core_app, "core-app", "Kotlin, SpringBoot", "Монолитное приложение:\n- пользовательский сценарий ОСАГО\n- оформление новых страховок\n- отображение купленных страховок\n- SSE-поток предложений ОСАГО")
+    ContainerDb(core_db, "core-db", "PostgreSQL", "БД используется для хранения:\n- заявок и оформленных страховок\n- локальной read-модели продуктов и тарифов\n- состояния заявок ОСАГО и полученных предложений\n- outbox-событий")
+
+    Container(client_info, "client-info", "Kotlin, SpringBoot", "Сервис для учёта клиентских данных")
+
+    Container(product_aggregator, "ins-product-aggregator", "Kotlin, SpringBoot", "Сервис интеграции со страховыми компаниями для продуктов и тарифов")
+    ContainerDb(product_aggregator_db, "ins-product-aggregator-db", "PostgreSQL", "БД используется для хранения:\n- продуктов и тарифов страховых компаний\n- версий тарифов\n- outbox-событий")
+
+    Container(osago_aggregator, "osago-aggregator", "Kotlin, SpringBoot", "Сервис интеграции по ОСАГО:\n- создаёт заявки в страховых компаниях\n- опрашивает предложения до 60 секунд\n- публикует результаты по мере поступления")
+    ContainerDb(osago_aggregator_db, "osago-aggregator-db", "PostgreSQL", "БД используется для хранения:\n- поисков предложений ОСАГО\n- статусов по каждой страховой компании\n- внешних request id\n- полученных предложений\n- poller locks и outbox-событий")
+
+    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Event Streaming platform:\n- события продуктов и тарифов\n- события жизненного цикла страховок\n- события предложений ОСАГО")
+
+    Container(settlement, "ins-comp-settlement", "Kotlin, SpringBoot", "Сервис взаиморасчётов со страховыми компаниями")
+    ContainerDb(settlement_db, "ins-comp-settlement-db", "PostgreSQL", "БД используется для хранения:\n- локальной read-модели продуктов и версий тарифов\n- оформленных страховок для взаиморасчётов\n- данных и статусов расчётов со страховыми компаниями")
+}
+
+Rel(customer, web, "Использует")
+
+Rel(web, core_app, "REST: создание заявки ОСАГО и выбор предложения\nSSE: поток предложений по мере поступления", "HTTPS\nRate Limiting, Timeout, Retry reconnect")
+Rel(core_app, core_db, "Работа с данными ОСАГО,\nread-моделями и outbox", "TCP")
+
+Rel(partner_systems, core_app, "Оформление страховок", "REST\nRate Limiting per partner, Timeout")
+
+Rel(core_app, osago_aggregator, "Запуск/отмена поиска предложений ОСАГО\nPOST /internal/v1/osago/quote-requests", "REST\nTimeout, Retry, Circuit Breaker")
+Rel(osago_aggregator, osago_aggregator_db, "Хранение состояния поиска,\npolling-задач, locks и outbox", "TCP")
+Rel(osago_aggregator, insurance_companies, "Создание заявок ОСАГО и polling предложений\nобщий deadline 60 секунд", "REST\nRate Limiting, Timeout, Retry, Circuit Breaker")
+Rel(osago_aggregator, kafka, "Публикация событий ОСАГО:\nOfferReceived, CompanyTimedOut, QuoteCompleted", "Kafka Producer\nTransactional Outbox, Retry")
+
+Rel_Left(product_aggregator, insurance_companies, "Периодическое получение продуктов и тарифов", "REST / SOAP / GraphQL\nTimeout, Retry, Circuit Breaker")
+Rel_Up(product_aggregator, product_aggregator_db, "Хранение проекции продуктов,\nверсий тарифов и outbox", "TCP")
+Rel(product_aggregator, kafka, "Публикация событий продуктов и тарифов", "Kafka Producer\nTransactional Outbox, Retry")
+
+Rel(kafka, core_app, "Получение событий продуктов,\nтарифов и предложений ОСАГО", "Kafka Consumer\nRetry, DLQ, Idempotency")
+Rel(kafka, settlement, "Получение событий продуктов,\nтарифов и страховок", "Kafka Consumer\nRetry, DLQ, Idempotency")
+Rel_Down(core_app, kafka, "Публикация событий жизненного цикла страховок", "Kafka Producer\nTransactional Outbox, Retry")
+
+Rel(core_app, client_info, "Получение/сохранение информации о клиентах", "REST\nTimeout, Retry, Circuit Breaker")
+Rel(web, client_info, "Получение/сохранение\nинформации о клиентах", "REST\nTimeout")
+Rel(client_info, settlement_db, "Работа с данными", "TCP")
+
+Rel(settlement, settlement_db, "Работа с локальными read-моделями\nи данными взаиморасчётов", "TCP")
+Rel(settlement, insurance_companies, "Передача данных для взаиморасчётов", "REST / SOAP / GraphQL\nTimeout, Retry, Circuit Breaker")
+
+Rel(core_app, payment_service, "Проведение оплаты\nза страховки", "HTTP\nTimeout, Circuit Breaker")
+Rel(web, payment_service, "Проведение оплаты\nза страховки (redirect)", "HTTP")
+
+legend right
+|= Обозначение на связях |= Паттерн |
+| TimeOut / Timeout | ограничение времени ожидания ответа |
+| Retry | повтор идемпотентной операции с backoff |
+| Rate Limiting | ограничение RPS или очереди |
+| Circuit Breaker | быстрое прекращение вызовов деградирующей зависимости |
+| DLQ | очередь сообщений, которые не обработались после retry |
+| Idempotency | защита от дублей при повторной доставке или retry |
+endlegend
+
+@enduml
