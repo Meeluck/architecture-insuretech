@@ -1,0 +1,39 @@
+schema {
+  query: Query
+}
+
+"""
+Date in ISO-8601 format: YYYY-MM-DD.
+"""
+scalar Date
+
+type Query {
+  """
+  Returns a client card by client ID.
+  The consumer selects the required parts of the card through the selection set.
+  """
+  client(id: ID!): Client
+}
+
+type Client {
+  id: ID!
+  name: String
+  age: Int
+  documents: [Document!]!
+  relatives: [Relative!]!
+}
+
+type Document {
+  id: ID!
+  type: String
+  number: String
+  issueDate: Date
+  expiryDate: Date
+}
+
+type Relative {
+  id: ID!
+  relationType: String
+  name: String
+  age: Int
+}
