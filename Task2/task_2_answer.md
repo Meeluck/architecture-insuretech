@@ -88,20 +88,6 @@ minikube service scaletestapp --url
 Task2/locustfile.py
 ```
 
-Содержимое сценария:
-
-```python
-from locust import HttpUser, between, task
-
-
-class WebsiteUser(HttpUser):
-    wait_time = between(0.1, 1)
-
-    @task
-    def index(self):
-        self.client.get("/")
-```
-
 Locust отправлял запросы на URL, полученный через `minikube service scaletestapp --url`.
 
 ## Результаты до нагрузки
@@ -219,15 +205,3 @@ Normal  SuccessfulRescale  New size: 3
 Статус `DesiredWithinRange` означает, что рассчитанное количество реплик находится между `minReplicas` и `maxReplicas`.
 
 События `SuccessfulRescale` подтверждают, что HPA выполнил масштабирование сначала до двух реплик, затем до трёх реплик.
-
-## Итог
-
-Задание выполнено:
-
-- Deployment создан для тестового приложения.
-- Service создан для доступа к приложению.
-- Metrics Server включён.
-- HPA создан и настроен на целевую утилизацию памяти `80%`.
-- Максимальное количество реплик ограничено значением `10`.
-- Под нагрузкой приложение масштабировалось с `1` до `3` реплик.
-- Логи с состоянием до и после нагрузки сохранены в директории `Task2`.
