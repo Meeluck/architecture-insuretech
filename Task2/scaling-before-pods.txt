@@ -1,0 +1,2 @@
+NAME                           READY   STATUS    RESTARTS   AGE
+scaletestapp-b45f9d786-s9r9q   1/1     Running   0          7m43s

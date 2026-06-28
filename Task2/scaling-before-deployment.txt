@@ -1,0 +1,2 @@
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+scaletestapp   1/1     1            1           7m43s
