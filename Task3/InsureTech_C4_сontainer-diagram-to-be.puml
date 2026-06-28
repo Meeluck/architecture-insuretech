@@ -1,0 +1,67 @@
+@startuml InsureTech_C4_container_diagram_to_be
+!include <C4/C4_Container>
+
+' skinparam componentStyle rectangle
+' skinparam packageStyle rectangle
+' skinparam linetype polyline
+' skinparam wrapWidth 200
+skinparam maxMessageSize 200
+
+title InsureTech - C4 Container diagram - To Be
+
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент", "Клиент")
+
+System_Ext(partner_systems, "Системы партнёров", "Системы партнёров, интегрирующие страховые услуги в свои продукты")
+
+System_Ext(payment_service, "Платёжный сервис", "Внешний платёжный сервис, через который осуществляется оплата страховок. Деньги уходят на счета страховых компаний")
+
+System_Ext(insurance_companies, "Страховые компании (10 интеграций)","API страховых компаний для получения тарифов, андерайтинга и оформления продуктов")
+
+
+System_Boundary(insuretech_prod, "InsureTech Prod") {
+    Container(web, "InsureTech Web", "JavaScript, React", "Веб-приложение InsureTech")
+
+    Container(core_app, "core-app", "Kotlin, SpringBoot", "Монолитное приложение")
+    ContainerDb(core_db, "core-db", "PostgreSQL", "БД используется для хранения:\n- заявок и оформленных страховок\n- локальной read-модели продуктов и тарифов\n- outbox-событий")
+
+    Container(client_info, "client-info", "Kotlin, SpringBoot", "Сервис для учёта клиентских данных")
+
+    Container(product_aggregator, "ins-product-aggregator", "Kotlin, SpringBoot", "Сервис интеграции со страховыми компаниями")
+    ContainerDb(product_aggregator_db, "ins-product-aggregator-db", "PostgreSQL", "БД используется для хранения:\n- информации о продуктах и тарифах страховых компаний\n- версий тарифов\n- outbox-событий")
+
+    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Event Streaming platform:\n- события продуктов и тарифов\n- события жизненного цикла страховок")
+
+    Container(settlement, "ins-comp-settlement", "Kotlin, SpringBoot", "Сервис взаиморасчётов со страховыми компаниями")
+    ContainerDb(settlement_db, "ins-comp-settlement-db", "PostgreSQL", "БД используется для хранения:\n- локальной read-модели продуктов и версий тарифов\n- оформленных страховок для взаиморасчётов\n- данных и статусов расчётов со страховыми компаниями")
+}
+
+Rel(customer, web, "Использует")
+
+Rel(web, core_app, "1. Получение тарифов\n2. Создание заявок на страховки", "REST")
+Rel(core_app, core_db, "Работа с данными", "TCP")
+
+
+Rel_Left(product_aggregator, insurance_companies, "Периодическое получение продуктов и тарифов", "REST / SOAP / GraphQL")
+Rel_Up(product_aggregator, product_aggregator_db, "Хранение проекции продуктов, версий тарифов и outbox", "TCP")
+Rel(product_aggregator, kafka, "Публикация событий", "Kafka Producer")
+
+Rel(kafka, core_app, "Получение событий\nо продуктах и тарифах", "Kafka Consumer")
+Rel(kafka, settlement, "Получение событий\nо продуктах, тарифах и страховках", "Kafka Consumer")
+Rel_Down(core_app, kafka, "Публикация событий", "Kafka Producer")
+
+Rel(core_app, client_info, "Получение/сохранение информации о клиентах", "REST")
+Rel(web, client_info, "Получение/сохранение\nинформации о клиентах", "REST")
+Rel(client_info, settlement_db, "Работа с данными", "TCP")
+
+Rel(settlement, settlement_db, "Работа с локальными read-моделями\nи данными взаиморасчётов", "TCP")
+Rel(settlement, insurance_companies, "Передача данных для взаиморасчётов", "REST / SOAP / GraphQL")
+
+
+Rel(core_app, payment_service, "Проведение оплаты\nза страховки", "HTTP")
+Rel(web, payment_service, "Проведение оплаты\nза страховки (redirect)", "HTTP")
+Rel(partner_systems, core_app, "Оформление страховок", "REST")
+
+
+@enduml
