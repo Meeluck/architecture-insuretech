@@ -1,0 +1,71 @@
+@startuml InsureTech_C4_container_diagram
+!include <C4/C4_Container>
+
+' skinparam componentStyle rectangle
+' skinparam packageStyle rectangle
+' skinparam linetype polyline
+' skinparam wrapWidth 200
+skinparam maxMessageSize 200
+
+title InsureTech - C4 Container diagram
+
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент", "Клиент")
+
+System_Ext(partner_systems, "Системы партнёров", "Системы партнёров, интегрирующие страховые услуги в свои продукты")
+System_Ext(payment_service, "Платёжный сервис", "Внешний платёжный сервис, через который осуществляется оплата страховок. Деньги уходят на счета страховых компаний")
+
+System_Boundary(insurance_companies, "Страховые компании (сейчас 5 интеграций)") {
+    System_Ext(insurance_company_1, "СК 1", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_2, "СК 2", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_3, "СК 3", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_4, "СК 4", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+    System_Ext(insurance_company_5, "СК 5", "API страховой компании для получения тарифов, андерайтинга и оформления продуктов")
+}
+
+System_Boundary(insuretech_prod, "InsureTech Prod") {
+    Container(web, "InsureTech Web", "JavaScript, React", "Веб-приложение InsureTech")
+    Container(core_app, "core-app", "Kotlin, SpringBoot", "Монолитное приложение:\n- отображает данные о доступных страховых продуктах\n- оформляет новые страховки\n- отображает информацию о купленных страховках")
+    ContainerDb(core_db, "core-db", "PostgreSQL", "БД используется для хранения тарифов страховых компаний, а также заявок клиентов на страховые продукты")
+
+    Container(client_info, "client-info", "Kotlin, SpringBoot", "Сервис для учёта клиентских данных")
+    
+
+    Container(product_aggregator, "ins-product-aggregator", "Kotlin, SpringBoot", "Сервис для интеграции со страховыми компаниями с целью получения информации по страховым продуктам. Предоставляет единый API для core-app")
+    Container(settlement, "ins-comp-settlement", "Kotlin, SpringBoot", "Сервис для осуществления взаиморасчётов со страховыми компаниями")
+    ContainerDb(settlement_db, "ins-comp-settlement-db", "PostgreSQL", "БД используется для хранения данных\n- об оформленных страховках и условиях взаиморасчётов с клиентами \n- данных клиентов: ФИО, телефон, паспорт и др. Информация необходима для оформления страховок")
+}
+
+Rel(customer, web, "Использует")
+
+Rel(web, core_app, "1. Получения тарифов\n2. Создание заявок на страховки", "REST")
+Rel(core_app, core_db, "Работа с данными", "TCP")
+Rel_Up(partner_systems, core_app, "Оформление страховок", "REST")
+
+Rel(core_app, product_aggregator, "Получение информации\nпо продуктам и тарифам", "REST")
+Rel_Left(product_aggregator, insurance_companies, "Получение информации\nпо продуктам и тарифам", "REST / SOAP / GraphQL")
+' Rel_Left(product_aggregator, insurance_company_1, "Получение информации\nпо продуктам и тарифам", "REST")
+' Rel_Left(product_aggregator, insurance_company_2, "Получение информации\nпо продуктам и тарифам", "SOAP")
+' Rel_Left(product_aggregator, insurance_company_3, "Получение информации\nпо продуктам и тарифам", "GraphQL")
+' Rel_Left(product_aggregator, insurance_company_4, "Получение информации\nпо продуктам и тарифам", "REST")
+' Rel_Left(product_aggregator, insurance_company_5, "Получение информации\nпо продуктам и тарифам", "SOAP")
+
+Rel_Right(core_app, client_info, "Получение/сохранение информации о клиентах", "REST")
+Rel(web, client_info, "Получение/сохранение\nинформации о клиентах", "REST")
+Rel(client_info, settlement_db, "Работа с данными", "TCP")
+
+Rel(settlement, settlement_db, "Работа с данными", "TCP")
+Rel(settlement, insurance_companies, "Передача данных для взаиморасчётов", "REST / SOAP / GraphQL")
+' Rel(settlement, insurance_company_1, "Передача данных\nдля взаиморасчётов", "REST")
+' Rel(settlement, insurance_company_2, "Передача данных\nдля взаиморасчётов", "SOAP")
+' Rel(settlement, insurance_company_3, "Передача данных\nдля взаиморасчётов", "GraphQL")
+' Rel(settlement, insurance_company_4, "Передача данных\nдля взаиморасчётов", "REST")
+' Rel(settlement, insurance_company_5, "Передача данных\nдля взаиморасчётов", "SOAP")
+Rel(settlement, product_aggregator, "Получение информации\nпо продуктам и тарифам", "REST")
+Rel(settlement, core_app, "Получение информации\nоб оформленных страховках", "REST")
+
+Rel(core_app, payment_service, "Проведение оплаты\nза страховки", "HTTP")
+Rel_Left(web, payment_service, "Проведение оплаты\nза страховки (redirect)", "HTTP")
+
+@enduml

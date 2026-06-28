@@ -1,0 +1,125 @@
+@startuml InsureTech_technology_architecture_to_be
+
+title InsureTech - технологическая архитектура to-be
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+
+rectangle "Браузер\nпользователя" as browser <<client>>
+rectangle "B2B-партнёр" as partner <<client>>
+
+cloud "CDN\nстатический контент" as cdn
+cloud "GeoDNS / Global Load Balancer\nвыбор ближайшего доступного региона" as global_lb
+
+browser --> cdn : загрузка статики
+browser --> global_lb : HTTPS / REST
+partner --> global_lb : HTTPS / API
+
+node "Регион ru-central" as ru_central {
+    node "Региональный L7 Load Balancer" as central_lb
+
+    node "Зона доступности ru-central-a" as central_az_a {
+        node "Kubernetes\ncluster central-a" as k8s_central_a {
+            frame "InsureTech\nnamespace" as ns_central_a {
+                ' component "core-app" as core_central_a
+                ' component "client-info" as client_info_central_a
+                ' component "ins-product-aggregator" as aggregator_central_a
+                ' component "ins-comp-settlement" as settlement_central_a
+            }
+        }
+
+        node "VM PostgreSQL 1" as pg_vm_1 {
+            database "PostgreSQL\nprimary" as pg_primary
+        }
+
+        node "VM PostgreSQL 1-read" as pg_vm_1_read {
+            database "PostgreSQL\nread replica" as pg_replica_central_a
+        }
+    }
+
+    node "Зона доступности ru-central-b" as central_az_b {
+        node "Kubernetes\ncluster central-b" as k8s_central_b {
+            frame "InsureTech\nnamespace" as ns_central_b
+        }
+
+        node "VM PostgreSQL 2" as pg_vm_2 {
+            database "PostgreSQL\nreplica" as pg_replica_central
+        }
+    }
+}
+
+node "Регион ru-east" as ru_east {
+    node "Региональный L7 Load Balancer" as east_lb
+
+    node "Зона доступности ru-east-a" as east_az_a {
+        node "Kubernetes\ncluster east-a" as k8s_east_a {
+            frame "InsureTech\nnamespace" as ns_east_a
+        }
+
+        node "VM PostgreSQL 3" as pg_vm_3 {
+            database "PostgreSQL\nasync replica" as pg_replica_east
+        }
+    }
+
+    node "Зона доступности ru-east-b" as east_az_b {
+        node "Kubernetes\ncluster east-b" as k8s_east_b {
+            frame "InsureTech\nnamespace" as ns_east_b
+        }
+
+        node "VM PostgreSQL 4" as pg_vm_4 {
+            database "PostgreSQL\nread replica" as pg_replica_east_b
+        }
+    }
+}
+
+database "Хранилище резервных копий\nfull backup + WAL archive" as backup
+
+global_lb --> central_lb : основной маршрут\nпри доступности региона
+global_lb --> east_lb : ближайший регион\nили failover
+
+central_lb --> ns_central_a : active-active\nhealth check
+central_lb --> ns_central_b : active-active\nhealth check
+east_lb --> ns_east_a : active-active\nhealth check
+east_lb --> ns_east_b : active-active\nhealth check
+
+ns_central_a --> pg_primary : запись
+ns_central_a --> pg_replica_central_a : чтение
+ns_central_b --> pg_primary : запись
+ns_central_b --> pg_replica_central : чтение
+
+ns_east_a --> pg_replica_east : чтение\nDR-площадка
+ns_east_b --> pg_replica_east_b : чтение\nлокальная реплика
+ns_east_a --> pg_primary : запись\nв текущий primary
+ns_east_b --> pg_primary : запись\nв текущий primary
+
+pg_primary --> pg_replica_central : потоковая репликация
+pg_primary --> pg_replica_central_a : потоковая репликация\nдля чтения в ru-central-a
+pg_primary --> pg_replica_east : асинхронная\nмежрегиональная репликация
+pg_replica_east --> pg_replica_east_b : репликация\nдля чтения в ru-east-b
+pg_primary --> backup : архивирование WAL\nи резервные копии
+
+note right of global_lb
+  Переключение трафика:
+  - отказ pod: Kubernetes пересоздаёт pod
+  - отказ зоны: региональный LB исключает зону
+  - отказ региона: GeoDNS / Global LB направляет трафик в другой регион
+end note
+
+note bottom of pg_primary
+  База данных:
+  - шардирование не применяется, объём данных 50 GB
+  - один primary для записи
+  - реплики в других зонах и регионе
+  - приложения ru-east читают из локальной реплики, но пишут в primary
+  - автоматический failover: Patroni + etcd/Consul
+  - RPO <= 15 минут за счёт репликации и WAL archive
+end note
+
+note bottom of ns_central_a
+  API для партнёров:
+  ограничение нагрузки на уровне Gateway / API Gateway,
+  например 20 RPS на партнёра
+end note
+
+@enduml

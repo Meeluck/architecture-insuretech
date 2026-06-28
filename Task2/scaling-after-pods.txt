@@ -1,0 +1,4 @@
+NAME                           READY   STATUS    RESTARTS        AGE
+scaletestapp-b45f9d786-b5j6p   1/1     Running   0               2m27s
+scaletestapp-b45f9d786-pkgnz   1/1     Running   0               3m27s
+scaletestapp-b45f9d786-s9r9q   1/1     Running   1 (2m22s ago)   13m
